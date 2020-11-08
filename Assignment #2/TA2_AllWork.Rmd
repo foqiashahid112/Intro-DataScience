@@ -1,0 +1,226 @@
+---
+title: "Team Assignment 2 All Work"
+author: "Ruth Mullin, Hawa Barry, Foqia Shahid"
+date: "10/21/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Initial setup:
+```{r}
+library(dplyr)
+library(tidyverse)
+library(readr)
+
+envsurvey <- read_csv("envsurvey.csv")
+```
+
+## Univariate Analysis
+```{r}
+summary(envsurvey)
+
+# EnvJst
+ggplot(envsurvey, aes(y = EnvJst)) +
+  geom_boxplot()
+
+# RETH
+table(envsurvey$RETH)
+
+# Envlist
+table(envsurvey$Envlist)
+```
+
+## Questions 1:
+```{r}
+envsurvey1 <- envsurvey %>%
+  mutate(avg_eco = (EnvIss_1+EnvIss_2+EnvIss_6+EnvIss_7+EnvIss_8+EnvIss_13+EnvIss_15+EnvIss_16)/8,
+         avg_anthro = (EnvIss_3+EnvIss_4+EnvIss_5+EnvIss_9+EnvIss_10+EnvIss_11+EnvIss_12+EnvIss_14+
+                         EnvIss_17+EnvIss_18)/10) %>%
+  drop_na(avg_anthro)
+
+# Univariate analysis for avg_eco and avg_anthro
+summary(envsurvey1$avg_eco)
+summary(envsurvey1$avg_anthro)
+
+ggplot(envsurvey1, aes(y = avg_eco)) +
+  geom_boxplot()
+ggplot(envsurvey1, aes(y = avg_anthro)) +
+  geom_boxplot()
+
+ggplot(data = envsurvey1, aes(x = avg_eco, y = EnvJst)) +
+  geom_jitter() +
+  geom_smooth()
+
+cor(envsurvey1$avg_eco, envsurvey1$EnvJst)
+
+ggplot(data = envsurvey1, aes(x = avg_anthro, y = EnvJst)) +
+  geom_jitter() +
+  geom_smooth()
+
+cor(envsurvey1$avg_anthro, envsurvey1$EnvJst) 
+
+envsurvey2 <- envsurvey1 %>%
+  mutate(avg_ea = (avg_eco + avg_anthro)/2)
+
+cor(envsurvey2$avg_ea, envsurvey2$EnvJst)
+
+# Average the two averages and check correlation to EnvJst
+envsurvey2 <- envsurvey1 %>%
+  mutate(avg_ea = (avg_eco + avg_anthro)/2)
+
+cor(envsurvey2$avg_ea, envsurvey2$EnvJst)
+```
+People who care about ecocentric issues also care more about env justice issues.
+People who care about anthro issues might not also care about env justice since the two are not completely related (but anthro = people so we would expect people who are concerned about anthropocentric issues to also care about environmental justice)
+
+## Question 2:
+```{r}
+# Add RETH to plots above
+ggplot(data = envsurvey1, aes(x = avg_eco, y = EnvJst, color = RETH)) +
+  geom_jitter() +
+  facet_wrap(~ RETH) +
+  geom_smooth()
+
+envsurvey1 %>%
+  ddply("RETH", summarise, corr=cor(avg_eco, EnvJst))
+
+ggplot(data = envsurvey1, aes(x = avg_anthro, y = EnvJst, color = RETH)) +
+  geom_jitter() +
+  facet_wrap(~ RETH) +
+  geom_smooth()
+
+envsurvey1 %>%
+  ddply("RETH", summarise, corr=cor(avg_anthro, EnvJst))
+```
+Does not really change previous findings (compare how graphs look and correlation coefficients)
+
+## Question 3:
+```{r}
+# Original graph
+ggplot(envsurvey1, aes(x= avg_eco)) +
+  geom_density()
+
+# New and improved graph
+ggplot(envsurvey1, aes(x = avg_eco, color = Envlist)) +
+  geom_density() +
+  labs(title = "Environmenalists' Ecocentric Scores are Higher Than Non-environmentalists'", 
+       subtitle = "Distribution of Average Ecocentric Scores by Environmental Identity", 
+       x = "Average Ecocentric Score", 
+       y = "Density", 
+       color = "Environmentalist Identity") +
+  theme_linedraw()
+```
+
+## Question 4:
+Relationship between EnvJust, EnvIss, and BYr
+```{r}
+# Univariate analysis BYr and EnvIss
+summary(envsurvey$BYr)
+ggplot(envsurvey, aes(x = BYr)) +
+  geom_histogram()
+
+summary(envsurvey$EnvIss)
+ggplot(envsurvey, aes(y = EnvIss)) +
+  geom_boxplot()
+
+# Group BYr by decade
+envsurvey <- envsurvey %>%
+  mutate(decade = case_when(BYr <= 1949 ~ "1940-1949",
+                            BYr <= 1959 & BYr >= 1950 ~ "1950-1959",
+                            BYr <= 1969 & BYr >= 1960 ~ "1960-1969",
+                            BYr <= 1979 & BYr >= 1970 ~ "1970-1979",
+                            BYr <= 1989 & BYr >= 1980 ~ "1980-1989",
+                            BYr <= 1999 & BYr >= 1990 ~ "1990-1999"))
+
+# How many people from each decade were surveyed?
+table(envsurvey$decade)
+
+# Avg EnvIss by decade
+envsurvey %>%
+  dplyr::group_by(decade) %>%
+  dplyr::summarize(avg_EnvIss = mean(EnvIss))
+
+# Avg EnvJst by decade
+envsurvey %>%
+  dplyr::group_by(decade) %>%
+  dplyr::summarize(avg_EnvJst = mean(EnvJst))
+
+# Plot enviss vs envjst by decade
+ggplot(envsurvey, aes(x = EnvIss, y = EnvJst, color = decade)) +
+  geom_jitter() +
+  facet_wrap(~ decade)
+
+# Corellation coefficient by decade
+envsurvey %>%
+  dplyr::group_by(decade) %>%
+  dplyr::summarize(COR=cor(EnvJst,EnvIss))
+```
+
+## Question 5: 
+RiskP, avg_eco, Edu
+```{r}
+# Univariate analysis for Edu
+table(envsurvey1$Edu)
+
+ggplot(envsurvey1,aes(x = Edu)) +
+  geom_bar() +
+  labs(title = "Education Background of Participants",
+       subtitle = "Most Participants are well-educated",
+       x = "Education",
+       y = "Frequency") +
+  coord_flip() +
+  theme_bw()
+
+# Univariate analysis RiskP 
+# To what extent do environmental problems pose a risk to the American public?
+ggplot(envsurvey1,aes(y = RiskP)) +
+  geom_boxplot() +
+  labs(title = "Most participants agree that environmental problems pose a risk to American public",
+       subtitle = "Distribution of RiskP score",
+       y = "RiskP Score") +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+
+#avg_eco: Average for ecocentric questions
+ggplot(envsurvey1,aes(y = avg_eco)) +
+  geom_boxplot() +
+  labs(title = "Most participants recognize environmental issues",
+       subtitle = "Distribution of Average Score for ecocentric questions",
+       y= "Average Score for Ecocentric Questions") +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+
+#Bivariate Analysis
+ggplot(envsurvey1, aes(x = avg_eco, y = RiskP)) +
+  geom_jitter() +
+  geom_smooth() +
+  theme_bw() +
+  labs(title = "Some correlation between Averge Ecocentric and RiskP Scores",
+       subtitle = "r = 0.43 ",
+       x = "Average Score for Ecocentric Questions",
+       y = "RiskP Score")
+
+cor(envsurvey1$avg_eco, envsurvey2$RiskP)
+
+#Multivariable analysis:
+ggplot(envsurvey1, aes(x = avg_eco, y = RiskP, color = Edu)) +
+  geom_jitter() +
+  theme_bw() +
+  labs(title = "Relationship Between Averge Ecocentric and RiskP Scores \n for Different Levels of Education",
+       x = "Average Score for Ecocentric Questions",
+       y = "RiskP Score") +
+  facet_wrap(~Edu) +
+  theme(legend.position = "none")
+
+envsurvey1 %>%
+  ddply("Edu", summarise, Correlation=cor(avg_eco, RiskP))
+
+ 
+```
+
+## Conclusion:

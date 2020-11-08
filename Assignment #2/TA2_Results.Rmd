@@ -1,0 +1,170 @@
+---
+title: "Team Assignment 2"
+author: "Ruth Mullin, Hawa Barry, Foqia Shahid"
+date: "10/21/2020"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Initial setup
+```{r}
+library(tidyverse)
+library(dplyr)
+library(readr)
+
+envsurvey <- read_csv("envsurvey.csv")
+```
+
+## Question 1
+```{r}
+# Create columns for average ecocentric and average anthropocentric scores
+envsurvey <- envsurvey %>%
+  mutate(avg_eco = (EnvIss_1+EnvIss_2+EnvIss_6+EnvIss_7+EnvIss_8+EnvIss_13+EnvIss_15+EnvIss_16)/8,
+         avg_anthro = (EnvIss_3+EnvIss_4+EnvIss_5+EnvIss_9+EnvIss_10+EnvIss_11+EnvIss_12+EnvIss_14+
+                         EnvIss_17+EnvIss_18)/10) %>%
+  drop_na(avg_anthro) 
+
+# Plot avg_eco against EnvJst and calculate correlation coefficient
+ggplot(data = envsurvey, aes(x = avg_eco, y = EnvJst)) +
+  geom_jitter() +
+  geom_smooth() +
+  theme_bw() +
+  labs(title = "Average Ecocentric Score vs. Environmental Justice Score",
+       x = "Average Ecocentric Score",
+       y = "Environmental Justice Score")
+
+cor(envsurvey$avg_eco, envsurvey$EnvJst)
+
+# Plot avg_anthro against EnvJst and calculate correlation coefficient
+ggplot(data = envsurvey, aes(x = avg_anthro, y = EnvJst)) +
+  geom_jitter() +
+  geom_smooth() +
+  theme_bw() +
+  labs(title = "Average Anthropocentric Score vs. Environmental Justice Score",
+       x = "Average Anthropocentric Score",
+       y = "Environmental Justice Score")
+
+cor(envsurvey$avg_anthro, envsurvey$EnvJst) 
+```
+evg_eco vs EnvJst = 0.44
+avg_anthro vs EnvJst = 0.16
+
+There is a higher correlation between average ecocentric score and environmental justice score than average anthropocentric score and environmental justice score. However, neither is very significant. This makes sense because simply believing that certain things are environmental issues does not mean that you will also believe that minorities are affected more than other groups by those issues (like the EnvJst questions ask). It makes sense that the correlation is higher for average ecocentric scores since ecocentric issues are more directly related to environmental justice. Key words such as industrial pollution are used in both the ecocentric environmental issue questions and the environmental justice questions, so people’s scores for these two types of questions could be similar. 
+
+## Question 2
+```{r}
+# Add RETH to avg_eco plot from question 1
+ggplot(data = envsurvey, aes(x = avg_eco, y = EnvJst, color = RETH)) +
+  geom_jitter() +
+  facet_wrap(~ RETH) +
+  theme_bw() +
+  labs(title = "Average Ecocentric Score vs. Environmental Justice Score\nfor Each Race/Ethnicity",
+       x = "Average Ecocentric Score",
+       y = "Environmental Justice Score",
+       color = "Race/Ethnicity")
+
+# Calculate correlation coefficient between avg_eco and EnvJst by RETH
+envsurvey %>%
+  dplyr::group_by(RETH) %>%
+  dplyr::summarize(correlation = cor(avg_eco, EnvJst))
+
+# Add RETH to avg_anthro plot from question 1
+ggplot(data = envsurvey, aes(x = avg_anthro, y = EnvJst, color = RETH)) +
+  geom_jitter() +
+  facet_wrap(~ RETH) +
+  theme_bw() +
+  labs(title = "Average Anthropocentric Score vs. Environmental Justice Score\nfor Each Race/Ethnicity",
+       x = "Average Anthropocentric Score",
+       y = "Environmental Justice Score",
+       color = "Race/Ethnicity")
+
+# Calculate correlation coefficient between avg_eco and EnvJst by RETH
+envsurvey %>%
+  dplyr::group_by(RETH) %>%
+  dplyr::summarize(correlation = cor(avg_anthro, EnvJst))
+```
+Adding in the RETH variable to our graphs for average eco/anthropocentric score vs. environmental justice score does not change our previous findings. Based on correlation coefficients for each RETH category, the findings still show the results still do not have much significance. The graphs look similar to our graphs from question 1. The ecocentric graph shows points clustering in the upper right-hand corner and the anthropocentric graph is more spread out, showing a lesser correlation. 
+
+## Question 3
+```{r}
+# Original graph
+ggplot(envsurvey, aes(x= avg_eco)) +
+  geom_density()
+
+# New and improved graph
+ggplot(envsurvey, aes(x = avg_eco, color = Envlist)) +
+  geom_density() +
+  labs(title = "Environmenalists' Ecocentric Scores are Higher than Non-environmentalists'", 
+       subtitle = "Distribution of Average Ecocentric Scores by Environmental Identity", 
+       x = "Average Ecocentric Score", 
+       y = "Density", 
+       color = "Environmentalist Identity") +
+  theme_bw()
+```
+
+## Question 4
+What is the relationship between average environmental issue score and average environmental justice score at different ages?
+```{r}
+# Group BYr by decade
+envsurvey <- envsurvey %>%
+  mutate(decade = case_when(BYr <= 1949 ~ "1940-1949",
+                            BYr <= 1959 & BYr >= 1950 ~ "1950-1959",
+                            BYr <= 1969 & BYr >= 1960 ~ "1960-1969",
+                            BYr <= 1979 & BYr >= 1970 ~ "1970-1979",
+                            BYr <= 1989 & BYr >= 1980 ~ "1980-1989",
+                            BYr <= 1999 & BYr >= 1990 ~ "1990-1999"))
+
+#
+ggplot(envsurvey, aes(x = EnvIss, y = EnvJst, color = decade)) +
+  geom_jitter() +
+  facet_wrap(~ decade) +
+  theme_bw() +
+  theme(legend.position = "none") +
+  labs(title = "Average Environmental Issue Score vs. Average Environmental Justice Score\nAcross Age Groups",
+       x = "Average Environmental Issue Score",
+       y = "Average Environmental Justice Score")
+
+#
+envsurvey %>%
+  dplyr::group_by(decade) %>%
+  dplyr::summarize(correlation = cor(EnvJst, EnvIss))
+```
+There is a positive weak association between environmental justice issues and environmental issues across all age groups mentioned in the dataset. People who care more about environmental justice issues also care more strongly about environmental issues and vice versa. People born in the fifties (1950-1959) experience the strongest association based on all other age groups with a correlation of ~0.4297688, however, the association between Environmental Justice and Environmental Issues is moderately positive.
+
+It is important to note that the younger age groups (people from the latest 3 decades) account for more than half of the people who were surveyed. Smaller samples from the earlier 3 decades may not represent their age groups very accurately. For example, only 20 people born between 1940 and 1949 were surveyed.
+
+## Question 5
+What is the relationship between average ecocentric score and RiskP score at different levels of education?
+```{r}
+ggplot(envsurvey, aes(x = avg_eco, y = RiskP, color = Edu)) +
+  geom_jitter() +
+  theme_bw() +
+  labs(title = "Relationship Between Averge Ecocentric and RiskP Scores\nfor Different Levels of Education",
+       x = "Average Score for Ecocentric Questions",
+       y = "RiskP Score") +
+  facet_wrap(~Edu) +
+  theme(legend.position = "none")
+
+envsurvey %>%
+  dplyr::group_by(Edu) %>%
+  dplyr::summarize(correlation = cor(avg_eco, RiskP))
+```
+From the above analysis, we can see that there is a positive relationship between Average Score for Ecocentric questions and the RiskP score. This implies that the participants who recognized environmental issues like flooding and climate change also agreed that environmental problems pose a risk to the American public. The relationship isnt strongly correlated but there is evidence to suggest that there is some correlation.
+
+It is significant to note that most of the participants in the study were educated people and data about people with less/no education background is scarce.
+
+It is also significant to note that participants with PhD and Prof Degrees had overall higher RiskP and Average Econcentric scores while data for individuals with HS Degree. The "some college" category had more scattered data.
+
+## Conclusion:
+With the envsurvey data set, we explored the relationship between ecocentric and anthropocentric average score and average environmental justice score. Then we added race/ethnicity to our analysis of these questions to see if anything changed. Upon doing this, we observed that nothing changed and there was still a low correlation for all race/ethnicity categories. 
+
+Next, we looked at the correlation between average environmental issue score and average environmental justice score at different age groups using the BYr (birth year) variable. We grouped the survey participants' birth years by decade. We discovered that there is a weak positive correlation between average environmental issue score and average environmental justice score. Out of all the age groups, those born between 1950 and 1959 had the strongest correlation between the two average scores. This might be because there were only 80 participants born in this range of years.
+
+Finally, we asked the question, "What is the relationship between average ecocentric score and RiskP score at different levels of education?" There is a weak positive correlation between average ecocentric score and RiskP score for all education levels. The level of education does not affect this corellation. Some levels of education were very underrepresented in the group of participants, such as those with less than a high school degree.
+
+Over all, we found that looking at different demographic variables did not affect the corellation coefficients between average scores. Even though the survey claims to have diverse participants, the groups are not equally represented. Most participants were from a certain background (white, educated, or younger (born between 1970-1999)). Among all the participants, there was a wide range of scores and answers to each question. 
