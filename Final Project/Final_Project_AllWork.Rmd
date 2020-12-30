@@ -1,0 +1,323 @@
+---
+title: "Final_Project_AllWork.Rmd"
+author: "Foqia Shahid"
+date: "12/14/2020"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(readr)
+library(tidyverse) 
+```
+
+Step 1: The Data
+```{r}
+#Read in data
+PakEdu <- read_csv("Consolidated (Educational Dataset).csv")
+head(PakEdu)
+```
+
+Our Model
+
+
+We are predicting percentage disparity(percent boys enrolled - percent girls enrolled) in schools across cities in Pakistan.
+The predictor variables are:
+1)Population
+2)Province
+3)Total schools/ km^2
+4)School Infrastructure Score (Arithmetic average f electricity, drinking water, toilet, boundary wall and satisfactory condition of school building indicators. Each of the 5 indicators carry equal weightage)
+5)Learning score(derives by averaging the literacy rate and basic competence in reading and writing)
+6)Enrollment score (derived from the underlying net access data from government agencies)
+
+
+Data Wrangling 
+Eliminating variables that I will not be using in my model and creating a new dataset with renamed and reordered variables.
+```{r}
+#A data frame with city names and corresponding provinces
+PakEdu.province <- select(PakEdu, "City", province = "Province")
+PakEdu.province <- unique(PakEdu.province)
+PakEdu.province
+
+#Clean and manipulate data to only include relevant variables
+PakEdu.data <- PakEdu %>%
+    select("City", "% Boys Enrolled", "% Girls Enrolled","Province", "Population", "Total number of schools", "Year","Gender parity score", "School infrastructure score", "Area (km²)") %>%
+  mutate(Percent_Boys_Enrolled = as.numeric(gsub("[\\%,]", "", PakEdu$`% Boys Enrolled`))) %>%
+  mutate(Percent_Girls_Enrolled = as.numeric(gsub("[\\%,]", "", PakEdu$`% Girls Enrolled`))) %>%
+  mutate(Total_schools = as.numeric(as.character(PakEdu$`Total number of schools`))) %>%
+  mutate(Area = as.numeric(as.character(PakEdu$`Area (km²)`))) %>%
+   mutate(Learning_score = as.numeric(as.character(PakEdu$`Learning score`))) %>%
+  mutate(Enrolment_score = as.numeric(as.character(PakEdu$`Enrolment score`))) %>%
+  mutate(Gender_parity_score = as.numeric(as.character(PakEdu$`Gender parity score`))) %>%
+  mutate(School_infrastructure_score = as.numeric(as.character(PakEdu$`School infrastructure score`))) %>%
+  mutate(Percentage_Disparity = Percent_Boys_Enrolled - Percent_Girls_Enrolled) %>%
+  mutate (Province = as.factor(Province)) 
+
+
+summary(PakEdu.data$area)
+#  mean of schools/area = inf (?), found min of area to be 0 -> bad data: Remove area == 0)
+PakEdu.data <- filter(PakEdu.data, Area > 0)
+#looked for other potential problems in data: found bad data in population 
+PakEdu.data <- filter(PakEdu.data, Population > 0)
+PakEdu.data <- mutate(PakEdu.data, Schools_per_Area = Total_schools / Area)
+PakEdu.data <- PakEdu.data %>%
+  group_by(City) %>% 
+  summarise(
+    percentage_disparity = mean(Percentage_Disparity, na.rm=TRUE),
+    gender_parity_score = mean(Gender_parity_score, na.rm=TRUE), 
+    population = mean(Population),
+    school_infrastructure_score = mean(School_infrastructure_score, na.rm=TRUE), 
+    schools_per_area = mean(Schools_per_Area),
+    area = mean(Area),
+    total_schools = mean(Total_schools),
+    learning_score = mean(Learning_score), 
+    enrolment_score = mean(Enrolment_score)
+  )
+PakEdu.data
+
+PakEdu.data <- PakEdu.data %>% 
+  full_join(PakEdu.province, by="City")
+PakEdu.data
+
+PakEdu.data <- select(PakEdu.data, city = City, percentage_disparity,
+    population,
+    school_infrastructure_score, 
+    schools_per_area,
+    learning_score, 
+    enrolment_score, province)
+PakEdu.data
+```
+
+Step#2: Exploratory Univariate Data Analysis
+
+1. Explore the distribution of each variable using the appropariate numerical and graphical techniques. Is the distribution normal or skewed? What does it tell you about the behavior? Is this distribution what you expected to see? Why, or why not? 
+
+```{r}
+#getting numerical summary information for each variable.
+summary(PakEdu.data)
+
+table(PakEdu.data$province)
+summary(PakEdu.data$region)
+
+ggplot(data = PakEdu.data, mapping = aes(x = region, fill = province)) + 
+  geom_bar(alpha = 2/3, position = "identity") +
+  labs(title = "Number of cities analysed in each region", x = "Region", y = "Number of cities") + theme_classic()
+
+#Distribution of percentage_disparity
+ggplot(PakEdu.data, aes(y = percentage_disparity)) +
+  geom_boxplot() +
+  labs(title = "Distribution of Percentage Disparity", y = "Percentage Disparity") + theme_bw()
+
+#Distribution of Population
+ggplot(PakEdu.data, aes(y = population)) +
+  geom_boxplot() +
+  labs(title = "Distribution of Population", y = "Population") + theme_bw()
+
+
+#Distribution of school_infrastructure_score
+ggplot(PakEdu.data, aes(y = school_infrastructure_score)) +
+  geom_boxplot()+
+  labs(title = "Distribution of Infrastructure Score", y = "Infrastructure Score") + theme_bw()
+
+
+#Distribution of enrolment_score
+ggplot(PakEdu.data, aes(y = enrolment_score)) +
+  geom_boxplot()+
+  labs(title = "Distribution of Enrollment Scores", y = "Enrollment Score") + theme_bw()
+
+
+#Distribution of schools_per_area 
+ggplot(PakEdu.data, aes(y = schools_per_area)) +
+  geom_boxplot()+
+  labs(title = "Distribution of Schools/km^2", y = "Schools/km^2") + theme_bw()
+
+
+#Distribution of learning_score
+ggplot(PakEdu.data, aes(y = learning_score)) +
+  geom_boxplot()+
+  labs(title = "Distribution of Learning Score", y = "Learning Score") + theme_bw()
+
+```
+Notes:
+More data on cities from Punjab, Balochistan and Sindh. However, generally well-represented data set. 
+Punjab region has the higest total population and all the cities generally tend to have higher population as well. On the other hand, Sindh has a greater spread in terms of population. Balochistan has relatively lower populations. 
+Overall, population is skewed towards low population cities. This makes sense since Pakistan only has a couple of big cities that are represented by the outliers in the data. 
+Percentage disparit across cities is almost normall distributed. 
+
+
+
+Step 3: Exploratory Bivariate Data Analysis
+
+1. Explore the relationship between each predictor variable and outcome variable using numerical and graphical techniques. Do you see evidence of non-linearity? Do you see evidence of high leverage outliers? A tip is to plot the dependent variable on the "Y" axis and the independent variable on the "X" axes so that the plot matches the way we talk about the variables in the model.
+
+2. In addition, we will want to examine the relationship between the predictor variables to confirm that we do not have issues with multicollinearity. 
+
+```{r}
+cor(PakEdu.data[,2:7], use = "pairwise.complete.obs") 
+
+#Check linearity
+ggplot(PakEdu.data, aes(population, percentage_disparity)) +
+  geom_point() + geom_smooth(method = "lm", se = FALSE) + theme_classic() +
+  labs(y = "Percentage Disparity", x = "Population", title = "Relationship between Percentage Disparity and Population")
+
+#remove apparent outliers
+PakEdu.data.pop <- filter (PakEdu.data, population < 13215631)
+ggplot(PakEdu.data.pop, aes(population, percentage_disparity)) +
+  geom_point() + geom_smooth(method = "lm", se = FALSE) + theme_classic() +
+  labs(y = "Percentage Disparity", x = "Population", title = "Relationship between Percentage Disparity and Population when outliers removed")
+
+#check correlations when population outliers are removed vs not removed
+cor(PakEdu.data$population, PakEdu.data$percentage_disparity, use = "complete.obs")
+cor(PakEdu.data.pop$population, PakEdu.data.pop$percentage_disparity, use = "complete.obs")
+
+
+ggplot(PakEdu.data, aes(schools_per_area, percentage_disparity)) +
+  geom_point() + geom_smooth(method = "lm", se = FALSE) + theme_classic() +
+  labs(y = "Percentage Disparity", x = "Schools/km^2", title = "Relationship between Percentage Disparity and Schools/ km^2")
+
+ggplot(PakEdu.data, aes(school_infrastructure_score, percentage_disparity)) +
+  geom_point() + geom_smooth(method = "lm", se = FALSE) + theme_classic() +
+  labs(y = "Percentage Disparity", x = "School Infrastructure Score", title = "Relationship between Percentage Disparity and School Infrastructure scores")
+
+ggplot(PakEdu.data, aes(learning_score, percentage_disparity)) +
+  geom_point() + geom_smooth(method = "lm", se = FALSE) + theme_classic() +
+  labs(y = "Percentage Disparity", x = "Learning Score", title = "Relationship between Percentage Disparity and Learning Scores")
+
+ggplot(PakEdu.data, aes(enrolment_score, percentage_disparity)) +
+  geom_point() + geom_smooth(method = "lm", se = FALSE) + theme_classic() +
+  labs(y = "Percentage Disparity", x = "Enrolment Score", title = "Relationship between Percentage Disparity and Enrolment Scores")
+
+ggplot(PakEdu.data, aes(x = reorder(province, percentage_disparity, na.rm = TRUE), y = percentage_disparity)) +
+  geom_boxplot() +
+  labs(y = "Percentage Disparity", x = "Province", title = "Relationship between Percentage Disparity and Province")
+
+```
+Findings:
+-There is evidence of medium- strong linear relationships between percentage disparity and the predictor variables
+-No evidence of multicollinearity between predictor variables
+-No high-leverage outliers 
+-(Population outliers arent high leverage as confirmed by leverage analysis in fit_1 with these outliers below)
+
+
+Step 4: Fitting the Data with lm() and Checking the Assumptions of "Linear" models
+
+
+```{r}
+table(PakEdu.data$province)
+fit_1  <- lm(percentage_disparity ~ population + school_infrastructure_score + schools_per_area + learning_score + enrolment_score + province, data = PakEdu.data)
+plot(fit_1)
+
+#population removed
+fit_test <- lm(percentage_disparity ~ population + school_infrastructure_score + schools_per_area + learning_score + enrolment_score + province, data = PakEdu.data.pop)
+plot(fit_test)
+
+```
+#Residual vs Fitted
+Since mean of residuals is aprox. zero, and the residuals are scattered randomly around horizontal line, this is a good indicator we dont have a non-linear relationship
+#Normal Q-Q
+Since residuals line up well on straight dashed line, we can assume residuals are normally distributed. 
+#Scale-Location
+Relatively horizontal line and no apparent pattern of residuals so equal variance
+#Residuals vs Leverage
+Since no residuals lay outside of Cooks distance, no outliers are influential to the regression results and so we do not have to exclude these.
+
+
+Step 5: Evaluating the model.
+```{r}
+summary(fit_1)
+```
+Our model:
+Percentage-Disparity-predicted = (8.865e+01) + -8.092e-07(Population) + -1.557e-01(school infrastructure score) +  -2.822e+00(schools/km^2) + -1.869e-01(learning score) + -7.102e-01(enrollment score) + 2.668e+01(if_balochistan) + 1.122e+01(if_FATA) + 6.689e+00(if_GB) + 1.429e+01(if_ICT) + 2.965e+0(if_KP) + 1.749e+01(if_Punjab) + 1.865e+01(if_Sindh)
+
+
+1. is this model a good fit?
+-We have a high-adjusted R^2 (0.7052). This is a large effect size according to Cohen's guide. It suggests that 70% of the variability in the city's percentage disparity can be explained (predicted) by the predictor variables in this model (Population, School Infrastructure Score, Schools/km^2, Learning Score, Enrollment Score, Province)
+-The F-statistic has a p value of essentially 0 i.e. F(12, 109) = 25.12, p < 0.01.
+
+2. what are the signigicant predictors?
+enrolment_score and province (balochistan, KP, Punjab, Sindh)
+
+3. What predictor has a larger impact?
+enrolment score has a larger predicted impact than any of the provinces. We can look at the absolute value of the estimated slope (β enrolment_score
+ vs β provinceBalochistan/KP/Punjab/Sindh
+ 
+4. for province, our reference category is AJK,  all these estimates are relative to a city from AJK
+Interpretation Let’s look at provinceBalochistan:
+Compared to a school from AJK, we would predict that on average a school from Balochistan would have percentage gender disparity that is 2.668e+01 higher holding all else constant.
+
+5. What would be the predicted percentage disparity for city Abbottabad (that has population =880666, school_infrastructure_score = 59.24411, schools_per_area = 59.24411, learning_score = 52.31015, enrolment score = 84.00923 and province = KP)?
+```{r}
+province_d <- c('KP')
+
+new <- data.frame(population = 880666, school_infrastructure_score = 59.24411, schools_per_area = 0.9283172, learning_score = 52.31015, enrolment_score = 84.00923, province = province_d)
+new
+predict(fit_1, new, interval = "predict")
+```
+Predicted percentage gender disparity in Abbottabad: 36.30107
+Actual percentage gender disparity in Abbottabad: 26.9875
+
+
+#Testing a Revised Model: CONTROL MODEL
+
+For this model, remove population, school_infrastructure_score, schools_per_area, learning_score, enrollment_score because these are not significant. We will also group provinces together, dividing Pakistan into Northern, Central and Southern regions. 
+
+```{r}
+
+PakEdu.data <- PakEdu.data %>% mutate(region = case_when(
+  province == "AJK" ~ "northern_pakistan",
+  province == "Balochistan" ~ "southern_pakistan",
+  province == "FATA" ~ "northern_pakistan",
+  province == "GB" ~ "northern_pakistan",
+  province == "KP" ~ "northern_pakistan", 
+  province == "Punjab" ~ "central_pakistan", 
+  province == "Sindh" ~ "southern_pakistan",
+  province == "ICT" ~ "central_pakistan" ))
+PakEdu.data
+
+
+str(PakEdu.data$region)
+
+PakEdu.data$region <- factor(PakEdu.data$region, c("northern_pakistan", 
+                                                     "central_pakistan", 
+                                                     "southern_pakistan"))
+
+summary(PakEdu.data$region)
+
+#adjusting baseline
+PakEdu.data$region <- relevel(PakEdu.data$region, ref="northern_pakistan")
+str(PakEdu.data$region)
+
+#fit_1 with region instead of province
+fit_w_region <- lm(percentage_disparity ~ population + school_infrastructure_score + schools_per_area + learning_score + enrolment_score + region, data = PakEdu.data)
+plot(fit_w_region)
+summary(fit_w_region)
+
+
+#REMOVE OUTLIER of population because of high leverage outlier
+PakEdu.data <- filter(PakEdu.data, population < 13215631)
+
+fit_w_region <- lm(percentage_disparity ~ population + school_infrastructure_score + schools_per_area + learning_score + enrolment_score + region, data = PakEdu.data)
+plot(fit_w_region)
+summary(fit_w_region)
+
+fit_w_region_2 <- lm(percentage_disparity ~  learning_score + enrolment_score + population, data = PakEdu.data)
+plot(fit_w_region_2)
+summary(fit_w_region_2)
+
+```
+
+```{r}
+#we can compare the two models based on AIC.
+AIC(fit_w_region)
+```
+
+```{r}
+AIC(fit_w_region_2)
+```
+
+fit_w_region_2 is better model. 

@@ -1,0 +1,419 @@
+---
+title: "Results.Rmd"
+author: "Foqia Shahid"
+date: "12/17/2020"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Introduction**
+
+
+Preface:
+
+Gender inequality has been a long-standing issue in Pakistan and the lack of access to education for girls has been a key component of this broader issue. Recently, Pakistan ranked 151 out of 153 countries on the Global Gender Gap Index Report 2020. The report is a strong indicator of the limited opportunities for women in Pakistan. For my project, I wanted to to particularly examine the gender disparity prevalent in schools across Pakistan. 
+
+
+About the Data:
+
+The data-set was compiled by Mesum Raza Hemani (Source: https://www.kaggle.com/mesumraza/pakistan-education-performance-dataset) and originally extracted from the surveys of Alif Ailaan & Aser Pakistan on Primary Schooling Performance in Pakistan. Alif Ailaan & Aser is an organization that collects data and information on children in Pakistan to obtain accurate estimates on their schooling and basic education (http://aserpakistan.org/index.php).
+
+The data gives information about primary & secondary schooling in Pakistan. It includes demographic information about 145 cities including population, area in km^2, province etc. It also includes relevant information about the primary and secondary schools in the cities such as the number of schools, % Boys and girls enrolled etc.
+
+For the purposes of this project, we will consider Percentage Disparity* (percent boys enrolled - percent girls enrolled) as the dependent variable and examine the following as independent variables (predictor variables):
+
+1)Population
+
+2)Region*
+
+3)Total schools/ km^2* (as a measure of proximity of schools)
+
+4)School Infrastructure Score (Arithmetic average of electricity, drinking water, toilet availability, boundary wall and satisfactory condition of school building indicators. Each of the 5 indicators carry equal weightage)
+
+5)Learning score (derives by averaging the literacy rate and basic competence in reading and writing)
+
+6)Enrollment score (derived from the underlying net access data from government agencies)
+
+*Variables that were created from the data for this project
+
+
+Context:
+
+We will explore the relationship of Percentage Disparity and the predictor variables as mentioned above. In doing so, we may expect to find negative correlations between Percentage Disparity and Population, School Infrastructure Score, Learning Score, Enrollment Score and Schools/km^2. We may also find varying disparity across different regions. Some factors may carry more weightage in our model than others. Particularly, Total schools/ km^2, Learning score, Enrollment score and School Infrastructure Score may be more strongly related to Percentage Disparity. 
+
+
+**Step 0: Install packages that we will need**
+
+```{r}
+library(readr)
+library(tidyverse) 
+```
+
+**Step 1: The Data**
+
+```{r}
+PakEdu <- read_csv("Consolidated (Educational Dataset).csv")
+head(PakEdu)
+```
+
+
+**Step 2: Data Wrangling**
+
+Eliminating variables that I will not be using in my model and creating a new dataset with renamed and reordered variables.
+
+```{r}
+#Create a dataframe with province data
+PakEdu.province <- select(PakEdu, "City", province = "Province")
+PakEdu.province <- unique(PakEdu.province)
+PakEdu.province <- mutate(PakEdu.province, province = as.factor(province))
+
+PakEdu.data <- PakEdu %>%
+    select("City", "% Boys Enrolled", "% Girls Enrolled","Province", "Population", "Total number of schools", "Year", "School infrastructure score", "Area (km²)", "Enrolment score", "Learning score") %>%
+  mutate(Percent_Boys_Enrolled = as.numeric(gsub("[\\%,]", "", PakEdu$`% Boys Enrolled`))) %>%
+  mutate(Percent_Girls_Enrolled = as.numeric(gsub("[\\%,]", "", PakEdu$`% Girls Enrolled`))) %>%
+  mutate(Total_Schools = as.numeric(as.character(PakEdu$`Total number of schools`))) %>%
+  mutate(Area = as.numeric(as.character(PakEdu$`Area (km²)`))) %>%
+  mutate(Learning_score = as.numeric(as.character(PakEdu$`Learning score`))) %>%
+  mutate(Enrolment_score = as.numeric(as.character(PakEdu$`Enrolment score`))) %>%
+  mutate(School_infrastructure_score = as.numeric(as.character(PakEdu$`School infrastructure score`))) %>%
+  mutate(Percentage_Disparity = Percent_Boys_Enrolled - Percent_Girls_Enrolled) %>%
+  mutate (Province = as.factor(Province))
+
+#Remove bad data points as neceassary
+PakEdu.data <- filter(PakEdu.data, Area > 0)
+PakEdu.data <- filter(PakEdu.data, Population > 0)
+PakEdu.data <- filter(PakEdu.data, Population < 13215631)
+PakEdu.data <- mutate(PakEdu.data, Schools_per_Area = Total_Schools / Area)
+PakEdu.data <- PakEdu.data %>%
+  group_by(City) %>% #so that data on cities repeated over  years is averaged
+  summarise(
+    percentage_disparity = mean(Percentage_Disparity, na.rm=TRUE),
+    population = mean(Population),
+    school_infrastructure_score = mean(School_infrastructure_score, na.rm=TRUE), 
+    schools_per_area = mean(Schools_per_Area),
+    learning_score = mean(Learning_score), 
+    enrolment_score = mean(Enrolment_score)
+  )
+
+#Adding variable "Province" to data
+PakEdu.data <- PakEdu.data %>% 
+  full_join(PakEdu.province, by="City")
+
+#Creating a category for province: We will group provinces together, dividing Pakistan into Northern, Central and Southern regions. 
+PakEdu.data <- PakEdu.data %>% mutate(region = case_when(
+  province == "AJK" ~ "northern_pakistan",
+  province == "Balochistan" ~ "southern_pakistan",
+  province == "FATA" ~ "northern_pakistan",
+  province == "GB" ~ "northern_pakistan",
+  province == "KP" ~ "northern_pakistan", 
+  province == "Punjab" ~ "central_pakistan", 
+  province == "Sindh" ~ "southern_pakistan",
+  province == "ICT" ~ "central_pakistan" ))
+
+#Make region a factor
+PakEdu.data$region <- factor(PakEdu.data$region, c("northern_pakistan", 
+                                                     "central_pakistan", 
+                                                     "southern_pakistan"))
+
+#Final DataSet
+PakEdu.data
+```
+
+**Step 3: Exploratory Univariate Data Analysis**
+
+1. Explore the distribution of each variable using the appropariate numerical and graphical techniques. Is the distribution normal or skewed? What does it tell you about the behavior? Is this distribution what you expected to see? Why, or why not? 
+
+```{r}
+#getting numerical summary information for each variable.
+summary(PakEdu.data)
+
+table(PakEdu.data$province)
+summary(PakEdu.data$region)
+
+ggplot(data = PakEdu.data, mapping = aes(x = region, fill = province)) + 
+  geom_bar(alpha = 2/3, position = "identity") +
+  labs(title = "Number of cities analysed in each region", x = "Region", y = "Number of cities") + theme_classic()
+
+#Distribution of percentage_disparity
+ggplot(PakEdu.data, aes(y = percentage_disparity)) +
+  geom_boxplot() +
+  labs(title = "Distribution of Percentage Disparity", y = "Percentage Disparity") + theme_bw()
+
+#Distribution of Population
+ggplot(PakEdu.data, aes(y = population)) +
+  geom_boxplot() +
+  labs(title = "Distribution of Population", y = "Population") + theme_bw()
+
+#Distribution of school_infrastructure_score
+ggplot(PakEdu.data, aes(y = school_infrastructure_score)) +
+  geom_boxplot()+
+  labs(title = "Distribution of Infrastructure Score", y = "Infrastructure Score") + theme_bw()
+
+
+#Distribution of enrolment_score
+ggplot(PakEdu.data, aes(y = enrolment_score)) +
+  geom_boxplot()+
+  labs(title = "Distribution of Enrollment Scores", y = "Enrollment Score") + theme_bw()
+
+
+#Distribution of schools_per_area 
+ggplot(PakEdu.data, aes(y = schools_per_area)) +
+  geom_boxplot()+
+  labs(title = "Distribution of Schools/km^2", y = "Schools/km^2") + theme_bw()
+
+
+#Distribution of learning_score
+ggplot(PakEdu.data, aes(y = learning_score)) +
+  geom_boxplot()+
+  labs(title = "Distribution of Learning Score", y = "Learning Score") + theme_bw()
+
+
+```
+Findings:
+
+-Central Pakistan has the highest number of cities
+
+-Large outliers are effecting the distribution of Population
+
+-Scores are relatively normally distributed
+
+
+**Step 4: Exploratory Bivariate Data Analysis**
+
+
+1. Exploring the relationship between each predictor variable and outcome variable using numerical and graphical techniques. Do you see evidence of non-linearity? Do you see evidence of high leverage outliers?
+
+2. In addition, we will want to examine the relationship between the predictor variables to confirm that we do not have issues with multicollinearity. 
+
+```{r}
+#Correlation table
+cor(PakEdu.data[,2:7], use = "pairwise.complete.obs") 
+
+
+#Check linearity
+ggplot(PakEdu.data, aes(population, percentage_disparity)) +
+  geom_point() + geom_smooth(method = "lm", se = FALSE) + theme_classic() +
+  labs(y = "Percentage Disparity", x = "Population", title = "Relationship between Percentage Disparity and Population")
+
+ggplot(PakEdu.data, aes(schools_per_area, percentage_disparity)) +
+  geom_point() + geom_smooth(method = "lm", se = FALSE) + theme_classic() +
+  labs(y = "Percentage Disparity", x = "Schools/km^2", title = "Relationship between Percentage Disparity and Schools/ km^2")
+
+ggplot(PakEdu.data, aes(school_infrastructure_score, percentage_disparity)) +
+  geom_point() + geom_smooth(method = "lm", se = FALSE) + theme_classic() +
+  labs(y = "Percentage Disparity", x = "School Infrastructure Score", title = "Relationship between Percentage Disparity and School Infrastructure scores")
+
+ggplot(PakEdu.data, aes(learning_score, percentage_disparity)) +
+  geom_point() + geom_smooth(method = "lm", se = FALSE) + theme_classic() +
+  labs(y = "Percentage Disparity", x = "Learning Score", title = "Relationship between Percentage Disparity and Learning Scores")
+
+ggplot(PakEdu.data, aes(enrolment_score, percentage_disparity)) +
+  geom_point() + geom_smooth(method = "lm", se = FALSE) + theme_classic() +
+  labs(y = "Percentage Disparity", x = "Enrolment Score", title = "Relationship between Percentage Disparity and Enrolment Scores")
+
+ggplot(PakEdu.data, aes(x = reorder(region, percentage_disparity, na.rm = TRUE), y = percentage_disparity)) +
+  geom_boxplot() +
+  labs(y = "Percentage Disparity", x = "Region", title = "Relationship between Percentage Disparity and Region")
+
+
+```
+Findings:
+
+-There is evidence of low/medium/strong linear relationships between percentage disparity and the predictor variables
+-No evidence of multicollinearity between predictor variables
+
+-1 high-leverage outliers (Population outlier of city Karachi was a high-leverage outlier as confirmed by leverage analysis and thus was removed previously)
+
+- Percentage Disparity is negatively correlated with Population, School Infrastructure Score, Learning Score, Enrollment Score, which confirms out hypothesis. We also found Pecentage Disparity to increase as region changes from Central to Northern to Southern Pakistan. it is interesting to see that Southern Pakistan has higher gender disparity than Northern Pakistan considering the demographics of the regions.
+
+
+**Step 5: Fitting the Data with lm() and Checking the Assumptions of "Linear" models**
+
+```{r}
+#Ajusting baseline for Region
+PakEdu.data$region <- relevel(PakEdu.data$region, ref="northern_pakistan")
+fit_1  <- lm(percentage_disparity ~ population + school_infrastructure_score + schools_per_area + learning_score + enrolment_score + region, data = PakEdu.data)
+plot(fit_1)
+```
+Findings: 
+
+#Residual vs Fitted:
+
+Mean of residuals is approximately zero, and the residuals are scattered randomly around the horizontal line. This is a good indicator we dont have a non-linear relationship
+
+
+#Normal Q-Q:
+
+Residuals line up well on straight dashed line. Thus, we can assume residuals are normally distributed. 
+
+
+#Scale-Location:
+
+While there isn't a completely horizontal line, no apparent pattern of residuals are seen. We will thus assume equal variance.
+
+
+#Residuals vs Leverage:
+
+No residuals lay outside of Cooks distance so no outliers are influential to the regression results.
+
+
+**Step 6: Evaluating the model.**
+
+```{r}
+summary(fit_1)
+```
+Findings:
+
+Model equation:
+
+Percentage-Disparity-predicted = (1.180e+02) + -3.893e-06(Population) + 1.028e-01(school infrastructure score) +  -2.774e+00(schools/km^2) + -4.792e-01(learning score) + -8.054e-01(enrollment score) + -2.148e+00(if_in_central_pakistan) + 3.279e+00(if_in_southern_pakistan)
+
+1.This model is a good fits as it significantly predicts the outcome variable.
+
+-We have a high-adjusted R^2 (0.6398). This is a large effect size according to Cohen's guide. It suggests that 64% of the variability in the city's percentage disparity can be explained (predicted) by the predictor variables in this model (Population, School Infrastructure Score, Schools/km^2, Learning Score, Enrollment Score, Region)
+-The F-statistic also has a p value of essentially 0 i.e. F(7, 113) = 31.45, p < 0.01.
+
+
+2. Enrollment scores, Learning Score and Population are significant predictors in our model.
+
+
+3.Enrollment score has a larger predicted than Learning Score and Population
+
+
+4.Using Model (fit_1):
+
+What would be the predicted percentage disparity for city Abbottabad?
+
+```{r}
+province_abb <- c('northern_pakistan')
+
+new <- data.frame(population = 880666, school_infrastructure_score = 59.24411, schools_per_area = 0.9283172, learning_score = 52.31015, enrolment_score = 84.00923, region = province_abb)
+new
+predict(fit_1, new, interval = "predict")
+```
+
+Predicted percentage gender disparity in Abbottabad: 25.37504
+
+Actual percentage gender disparity in Abbottabad: 26.9875
+
+
+**Step 7:Testing a Revised Model: CONTROL MODEL**
+
+For this model, remove school_infrastructure_score, schools_per_area and region since these aren't significant.
+
+```{r}
+
+#We will try another model with the significant predictors i.e. enrolment_score, learning score and population
+fit_2 <- lm(percentage_disparity ~ enrolment_score + population + learning_score, data = PakEdu.data)
+plot(fit_2)
+```
+Findings: 
+
+#Residual vs Fitted:
+
+Mean of residuals is approximately zero, and the residuals are scattered randomly around the horizontal line. This is a good indicator we dont have a non-linear relationship
+
+
+#Normal Q-Q:
+
+Residuals line up well on straight dashed line. Thus, we can assume residuals are normally distributed. 
+
+
+#Scale-Location:
+
+While there isn't a completely horizontal line, no apparent pattern of residuals are seen. We will thus assume equal variance.
+
+
+#Residuals vs Leverage:
+
+No residuals lay outside of Cooks distance so no outliers are influential to the regression results.
+
+
+```{r}
+summary(fit_2)
+```
+Findings:
+
+Model equation:
+
+Percentage-Disparity-predicted = (1.257e+02) + -3.355e-06(Population) + -5.388e-01(learning score) + -8.005e-01(enrollment score)
+
+
+1.This model is a good fits as it significantly predicts the outcome variable. 
+
+-We have a high-adjusted R^2 (0.6461). This is a large effect size according to Cohen's guide. It suggests that 65% of the variability in the city's percentage disparity can be explained (predicted) by the predictor variables in this model (Population, Learning Score, Enrollment Score)
+
+-The F-statistic has a p value of essentially 0 i.e. F(3, 117) = 74.02, p < 0.01.
+
+
+2.Enrollment scores, Learning Score and Population are significant predictors in this model as well.
+
+
+3.Enrollment score has a larger predicted impact than any of the provinces.
+
+
+4.Using Model (fit_2):
+
+What would be the predicted percentage disparity for city Abbottabad?
+```{r}
+province_d <- c('KP')
+
+new <- data.frame(population = 880666, school_infrastructure_score = 59.24411, schools_per_area = 0.9283172, learning_score = 52.31015, enrolment_score = 84.00923, province = province_d)
+new
+predict(fit_2, new, interval = "predict")
+```
+(P1)Predicted percentage gender disparity in Abbottabad using fit_1: 25.37504
+
+(P2)Predicted percentage gender disparity in Abbottabad using fit_2: 27.30702
+
+(A)Actual percentage gender disparity in Abbottabad: 26.9875
+
+A - P1 = 26.9875 - 25.37504 = 1.61246 
+
+A - P2 = 26.9875 - 27.30702 = -0.31952  
+
+Thus, fit_2 gave better prediction and it has less predictor variables. 
+
+
+```{r}
+#Finally, we can conclusively compare the two models based on AIC.
+AIC(fit_1)
+```
+
+
+```{r}
+AIC(fit_2)
+```
+
+Since 966.4765 < 972.3839, fit_2 is a better model. 
+
+
+**Conclusion**
+Thoughts: 
+
+For this project, I wanted to explore the relationship of Percentage Disparity and the predictor variables Population, School Infrastructure Score, Learning Score, Enrollment Score, Total schools/ km^2 and Region. I found negative correlations between Percentage Disparity and Population, School Infrastructure Score, Learning Score, Enrollment Score and Total schools/km^2. We also found that Percentage Disparity varies across different regions in Pakistan.
+
+I hypothesized that Total schools/ km^2, Learning score, Enrollment score and School Infrastructure Score would be more strongly related to Percentage Disparity. Through my analysis, I found that population, learning score and enrollment score were the most significant predictor variables. It was interesting to note that Infrastructure Score, which is an idicator of the facilities provided by schools, did not affect percentage disparity significantly. I was also suprised to find that the proximity of schools (Total schools/ km^2) did not significant impact disparity in my model. 
+
+Results:
+
+For this project, we developed a model that effectively predicts percentage disparity in schools across cities in Pakistan using Multiple Regression in R. We found the significant predictors to be population, learning score and enrollment score.
+
+The model equation is as follows:
+
+Percentage-Disparity-predicted = (1.257e+02) + -3.355e-06(Population) + -5.388e-01(learning score) + -8.005e-01(enrollment score)
+
+-As Population increases, Percentage-Disparity is predicted to decrease
+
+-As Learning Score increases, Percentage-Disparity is predicted to decrease
+
+-As Enrollment score increases, Percentage-Disparity is predicted to decrease
+
+This model significantly predicts the outcome variable (R^2 = 0.6461; F(3, 117) = 74.02, p < 0.01).
+
+Thus, if we have the population, (mean) learning score, and (mean) enrollment score of a city in Pakistan, we can effectively predict the percentage disparity in that city using our model. 
